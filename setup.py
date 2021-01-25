@@ -8,6 +8,7 @@ version = '1.3.0.dev0'
 
 # Please update tox.ini when modifying dependency version requirements
 install_requires = [
+    'asn1crypto>=1.4.0',
     # load_pem_private/public_key (>=0.6)
     # rsa_recover_prime_factors (>=0.8)
     'cryptography>=0.8',

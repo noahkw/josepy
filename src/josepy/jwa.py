@@ -5,6 +5,9 @@ https://tools.ietf.org/html/draft-ietf-jose-json-web-algorithms-40
 """
 import abc
 import logging
+import math
+
+from asn1crypto.core import SequenceOf, Integer
 
 import cryptography.exceptions
 from cryptography.hazmat.backends import default_backend
@@ -164,11 +167,20 @@ class _JWAPS(_JWARSA, JWASignature):
 class _JWAEC(JWASignature):
     kty = jwk.JWKEC
 
+    class RSSignature(SequenceOf):
+        _child_spec = Integer
+
     def __init__(self, name, hash_):
         super(_JWAEC, self).__init__(name)
         self.hash = hash_()
 
     def sign(self, key, msg):
+        sig = self._sign(key, msg)
+        seq = _JWAEC.RSSignature.load(sig)
+        return (r := seq[0].native).to_bytes(length=math.ceil(r.bit_length() / 8), byteorder='big') + \
+               (s := seq[1].native).to_bytes(length=math.ceil(s.bit_length() / 8), byteorder='big')
+
+    def _sign(self, key, msg):
         """Sign the ``msg`` using ``key``."""
         # If cryptography library supports new style api (v1.4 and later)
         new_api = hasattr(key, 'sign')
@@ -190,6 +202,14 @@ class _JWAEC(JWASignature):
             raise errors.Error(str(error))
 
     def verify(self, key, msg, sig):
+        rlen = math.ceil(key._wrapped.key_size / 8)
+        seq = _JWAEC.RSSignature([Integer(int.from_bytes(sig[0:rlen], byteorder="big")),
+                                  Integer(int.from_bytes(sig[rlen:],
+                                                         byteorder = "big"))])
+        asn1sig = seq.dump()
+        return self._verify(key, msg, asn1sig)
+
+    def _verify(self, key, msg, sig):
         """Verify the ``msg` and ``sig`` using ``key``."""
         # If cryptography library supports new style api (v1.4 and later)
         new_api = hasattr(key, 'verify')
